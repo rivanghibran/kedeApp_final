@@ -1,32 +1,23 @@
 // lib/screens/category_detail_screen.dart
 import 'package:flutter/material.dart';
-// import 'package:flutter_svg/flutter_svg.dart'; // <-- Hapus/Komentari ini
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
 
-// Ganti 'kede_app' dengan nama proyek Anda di pubspec.yaml
-// (Jika nama proyek Anda 'kede', ganti 'kede_app' menjadi 'kede')
-import '/main.dart';
-import '/models/product.dart';
+// Ganti 'kede_app' dengan nama proyek Anda di pubspec.yaml jika perlu
+import '/main.dart'; 
+import '../models/product_model.dart'; // Import model Product yang baru
 import '/widgets/product_card.dart';
 
 class CategoryDetailScreen extends StatelessWidget {
   final String categoryName;
-  final String iconPath; // Ini masih 'assets/icons/grapes.svg'
+  final String iconPath; 
   final int itemCount;
 
-  CategoryDetailScreen({
+  const CategoryDetailScreen({
     super.key,
     required this.categoryName,
     required this.iconPath,
     required this.itemCount,
   });
-
-  // Pastikan nama file ini sama dengan di folder assets/images/
-  final List<Product> products = [
-    Product(name: 'Avocado', imagePath: 'assets/images/avocado.jpg', price: 6.7, isFavorite: true),
-    Product(name: 'Brocoli', imagePath: 'assets/images/brocoli.jpg', price: 8.7),
-    Product(name: 'Tomatoes', imagePath: 'assets/images/tomatoes.jpg', price: 4.9),
-    Product(name: 'Grapes', imagePath: 'assets/images/grapes.jpg', price: 7.2),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -38,34 +29,71 @@ class CategoryDetailScreen extends StatelessWidget {
           _buildSearchBar(),
           const SizedBox(height: 16),
           
+          // --- BAGIAN INI DIUBAH MENJADI STREAMBUILDER ---
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.8,
-              ),
-              itemCount: products.length,
-              itemBuilder: (context, index) {
-                // ProductCard akan memuat gambar JPG
-                return ProductCard(product: products[index]);
+            child: StreamBuilder<QuerySnapshot>(
+              // Query ke Firestore: ambil produk yang kategorinya sama dengan halaman ini
+              stream: FirebaseFirestore.instance
+                  .collection('products')
+                  .where('category', isEqualTo: categoryName)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                // 1. Loading State
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                // 2. Error State
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                }
+
+                // 3. Empty State
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.search_off, size: 60, color: Colors.grey),
+                        const SizedBox(height: 10),
+                        Text('No items found in $categoryName', style: const TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                  );
+                }
+
+                // 4. Data Ready State
+                final docs = snapshot.data!.docs;
+                
+                return GridView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 0.8,
+                  ),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    // Konversi dokumen Firestore ke Model Product
+                    Product product = Product.fromFirestore(docs[index]);
+                    
+                    // Tampilkan Card
+                    return ProductCard(product: product);
+                  },
+                );
               },
             ),
           ),
+          // --- BATAS PERUBAHAN ---
         ],
       ),
     );
   }
 
   Widget _buildHeader(BuildContext context) {
-    // --- PERUBAHAN DI SINI ---
-    // Kita ubah path dari .svg ke .png
-    // Ini mengasumsikan Anda sudah menyimpan 'grapes.png', 'leaf.png'
-    // di dalam folder 'assets/icons/'
+    // Logika convert path SVG ke PNG (sesuai kode Anda sebelumnya)
     final String pngIconPath = iconPath.replaceAll('.svg', '.png');
-    // --- BATAS PERUBAHAN ---
 
     return Container(
       width: double.infinity,
@@ -79,20 +107,17 @@ class CategoryDetailScreen extends StatelessWidget {
           Positioned(
             right: -40,
             bottom: -30,
-            // --- PERUBAHAN DI SINI ---
-            // Ganti SvgPicture.asset menjadi Image.asset
             child: Image.asset(
-              pngIconPath, // Memuat file .png
+              pngIconPath, 
               width: 150,
               height: 150,
-              color: Colors.white.withOpacity(0.1), // Efek transparan
+              color: Colors.white.withOpacity(0.1), 
               colorBlendMode: BlendMode.srcIn,
               errorBuilder: (context, error, stackTrace) {
-                // Error jika file .png tidak ditemukan
-                return const Icon(Icons.error, color: Colors.white, size: 50);
+                // Fallback jika PNG tidak ditemukan, coba load original path atau icon default
+                return const Icon(Icons.category, color: Colors.white10, size: 100);
               },
             ),
-            // --- BATAS PERUBAHAN ---
           ),
           
           SafeArea(
@@ -124,7 +149,9 @@ class CategoryDetailScreen extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '$itemCount items',
+                    // Jika data realtime, itemCount mungkin perlu diupdate dari snapshot, 
+                    // tapi untuk sekarang kita pakai data dari halaman sebelumnya
+                    '$itemCount items', 
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.8),
                       fontSize: 16,
@@ -155,6 +182,10 @@ class CategoryDetailScreen extends StatelessWidget {
           ),
           contentPadding: const EdgeInsets.symmetric(vertical: 16),
         ),
+        // Implementasi logika search bisa ditambahkan di onChanged
+        onChanged: (value) {
+          // Todo: Implement local search filter logic
+        },
       ),
     );
   }

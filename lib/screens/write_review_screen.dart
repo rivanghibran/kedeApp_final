@@ -1,7 +1,9 @@
 // lib/screens/write_review_screen.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../main.dart';
-import '../models/product.dart';
+import '../models/product_model.dart'; // Pastikan path ini benar
+import '../services/firestore_service.dart';
 
 class WriteReviewScreen extends StatefulWidget {
   final Product product;
@@ -14,11 +16,58 @@ class WriteReviewScreen extends StatefulWidget {
 class _WriteReviewScreenState extends State<WriteReviewScreen> {
   int _selectedRating = 0;
   final TextEditingController _reviewController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
     _reviewController.dispose();
     super.dispose();
+  }
+
+  // Fungsi Submit Review ke Firestore
+  Future<void> _submitReview() async {
+    if (_selectedRating == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a star rating')),
+      );
+      return;
+    }
+
+    if (_reviewController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please write a comment')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Ambil nama user yang sedang login
+      final user = FirebaseAuth.instance.currentUser;
+      final userName = user?.displayName ?? 'Anonymous';
+
+      // Panggil Service
+      await FirestoreService().addReview(
+        widget.product.id,
+        _selectedRating.toDouble(),
+        _reviewController.text.trim(),
+        userName,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pop(context); // Kembali ke halaman detail
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Thank you for your review!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -54,8 +103,10 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20),
                           image: DecorationImage(
-                            // --- MENGGUNAKAN NETWORK IMAGE ---
-                            image: NetworkImage(widget.product.imagePath), // Ini URL
+                            // Menggunakan logic AssetImage / NetworkImage
+                            image: widget.product.imagePath.startsWith('http')
+                                ? NetworkImage(widget.product.imagePath)
+                                : AssetImage(widget.product.imagePath) as ImageProvider,
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -82,6 +133,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                 ),
                 const SizedBox(height: 32),
 
+                // Star Rating Input
                 Center(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -133,35 +185,27 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
             ),
           ),
           
-          _buildSubmitButton(context),
+          // Submit Button
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.all(20.0).copyWith(bottom: 30),
+              color: Colors.white,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _submitReview,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kPrimaryColor,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: _isLoading 
+                  ? const CircularProgressIndicator(color: Colors.white) 
+                  : const Text('SUBMIT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSubmitButton(BuildContext context) {
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        padding: const EdgeInsets.all(20.0).copyWith(bottom: 30),
-        color: Colors.white,
-        child: ElevatedButton(
-          onPressed: () {
-            print('Review Submitted!');
-            print('Product: ${widget.product.name}');
-            print('Rating: $_selectedRating stars');
-            print('Comment: ${_reviewController.text}');
-
-            Navigator.pop(context);
-            
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Thank you for your review!')),
-            );
-          },
-          child: const Text('SUBMIT'),
-        ),
       ),
     );
   }

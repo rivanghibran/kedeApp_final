@@ -1,18 +1,18 @@
 // lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Wajib diimpor
-// Impor lainnya (asumsi path sudah benar)
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; 
+
+// Import file proyek
 import '../main.dart'; 
+import '../models/product_model.dart'; // Perbaikan: product.dart bukan product_model.dart
+import '../models/category.dart'; 
+import '../widgets/product_card.dart'; 
+import '../services/seeder_service.dart'; // Import service untuk upload data
+
 import 'category_list_screen.dart'; 
 import 'category_detail_screen.dart'; 
-import '../models/product.dart';
 import 'product_detail_screen.dart';
-
-// Asumsi Konstanta (Jika tidak ada di main.dart, definisikan di sini)
-// const kTextColor = Colors.black; 
-// const kTextLightColor = Colors.grey; 
-// const kPrimaryColor = Colors.blue; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,58 +22,79 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Nilai default, akan diisi oleh _loadUserName()
   String _firstName = 'User';
   String _lastName = '';
   
   @override
   void initState() {
     super.initState();
-    // Memuat nama segera setelah widget dibuat
     _loadUserName();
   }
 
-  // Fungsi untuk mengambil dan memisahkan nama pengguna dari Firebase Display Name
   void _loadUserName() {
-    // 1. Ambil pengguna yang sedang login
     final user = FirebaseAuth.instance.currentUser;
-    
-    // 2. Ambil nama lengkap yang disimpan (format: "First Name Last Name")
     final fullName = user?.displayName ?? 'Guest User'; 
     
-    String tempFirstName = ''; // Default untuk tampilan jika nama kosong
+    String tempFirstName = ''; 
     String tempLastName = '';
 
     if (fullName != 'Guest User' && fullName.isNotEmpty) {
-      // 3. Pisahkan nama berdasarkan spasi
       final nameParts = fullName.split(' ');
-      
       if (nameParts.isNotEmpty) {
-        // First Name adalah kata pertama
         tempFirstName = nameParts.first;
       }
-      
-      // Last Name adalah semua kata setelah kata pertama
       if (nameParts.length > 1) {
         tempLastName = nameParts.sublist(1).join(' '); 
       }
     }
 
-    // Jika _firstName masih kosong, gunakan 'Hello' untuk sapaan 'Good Morning Hello'
     if (tempFirstName.isEmpty) {
       tempFirstName = 'Hello';
     }
 
-    // Perbarui State
-    setState(() {
-      _firstName = tempFirstName;
-      _lastName = tempLastName;
-    });
+    if (mounted) {
+      setState(() {
+        _firstName = tempFirstName;
+        _lastName = tempLastName;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
+      
+      // --- TOMBOL SEMENTARA UNTUK UPLOAD DATA ---
+      // Klik tombol ini sekali untuk mengisi database, setelah sukses tombol ini boleh dihapus.
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: Colors.red,
+        icon: const Icon(Icons.cloud_upload, color: Colors.white),
+        label: const Text("Isi Data Awal", style: TextStyle(color: Colors.white)),
+        onPressed: () async {
+          try {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Sedang mengupload data...")),
+            );
+            
+            await SeederService().seedDatabase();
+            
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("✅ Sukses! Data Pasar Jateng/DIY berhasil diupload.")),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text("Gagal: $e")),
+              );
+            }
+          }
+        },
+      ),
+      // -------------------------------------------
+
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
@@ -97,12 +118,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              _buildCategoryList(context),
+              _buildCategoryList(context), 
               const SizedBox(height: 32),
 
               _buildSectionHeader(title: 'Trending Deals', onPressed: () {}),
               const SizedBox(height: 16),
-              _buildTrendingList(context), 
+              _buildTrendingList(context),
             ],
           ),
         ),
@@ -110,7 +131,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- WIDGET HEADER DENGAN NAMA PENGGUNA YANG DINAMIS ---
   Widget _buildHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -120,7 +140,6 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Text('Good Morning',
                 style: TextStyle(color: kTextLightColor, fontSize: 16)),
-            // MENAMPILKAN FIRST NAME dan LAST NAME
             Text('$_firstName $_lastName',
                 style: const TextStyle(
                     color: kTextColor,
@@ -136,8 +155,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     );
   }
-
-  // --- WIDGET LAINNYA ---
 
   Widget _buildRecipeCard() {
     return Container(
@@ -197,20 +214,34 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildCategoryList(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          _buildCategoryItem(context, 'Fruits', 'assets/icons/grapes.svg', 87),
-          _buildCategoryItem(context, 'Vegetables', 'assets/icons/leaf.svg', 24),
-          _buildCategoryItem(context, 'Mushroom', 'assets/icons/mushroom.svg', 43),
-          _buildCategoryItem(context, 'Bread', 'assets/icons/bread.svg', 22),
-        ],
+    return SizedBox(
+      height: 100, 
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('categories').snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) return const Text("Error loading categories");
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+
+          final docs = snapshot.data!.docs;
+          if (docs.isEmpty) return const Text("No categories");
+
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final category = Category.fromFirestore(docs[index]);
+              return _buildCategoryItem(context, category);
+            },
+          );
+        },
       ),
     );
   }
 
-  Widget _buildCategoryItem(BuildContext context, String name, String iconPath, int itemCount) {
+  Widget _buildCategoryItem(BuildContext context, Category category) {
+    // Logika konversi SVG ke PNG agar konsisten dengan layar lain
+    final String pngIconPath = category.iconPath.replaceAll('.svg', '.png');
+
     return Padding(
       padding: const EdgeInsets.only(right: 16.0),
       child: GestureDetector(
@@ -219,82 +250,80 @@ class _HomeScreenState extends State<HomeScreen> {
             context,
             MaterialPageRoute(
               builder: (context) => CategoryDetailScreen(
-                categoryName: name,
-                iconPath: iconPath,
-                itemCount: itemCount,
+                categoryName: category.name,
+                iconPath: category.iconPath,
+                itemCount: category.itemCount,
               ),
             ),
           );
         },
-        child: Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: kPrimaryColor.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Center(
-            child: SvgPicture.asset(
-              iconPath,
-              height: 40,
-              width: 40,
-              colorFilter: const ColorFilter.mode(kPrimaryColor, BlendMode.srcIn),
-              errorBuilder: (context, error, stackTrace) =>
-                  const Icon(Icons.error, color: Colors.red),
+        child: Column(
+          children: [
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                color: kPrimaryColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Center(
+                child: Image.asset(
+                  pngIconPath,
+                  height: 35,
+                  width: 35,
+                  color: kPrimaryColor,
+                  colorBlendMode: BlendMode.srcIn,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.image_not_supported, color: kPrimaryColor),
+                ),
+              ),
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(category.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildTrendingList(BuildContext context) {
-    final Product avocado = Product(
-      name: 'Avocado',
-      imagePath: 'assets/images/avocado.jpg',
-      price: 6.7, 
-      isFavorite: true 
-    );
-    
-    final Product brocoli = Product(
-      name: 'Brocoli',
-      imagePath: 'assets/images/brocoli.jpg',
-      price: 8.7, 
-      isFavorite: false 
-    );
-
-    final Product tomatoes = Product(
-      name: 'Tomatoes',
-      imagePath: 'assets/images/tomatoes.jpg',
-      price: 4.9,
-      isFavorite: false,
-    );
-
-    final Product grapes = Product(
-      name: 'Grapes',
-      imagePath: 'assets/images/grapes.jpg',
-      price: 7.2,
-      isFavorite: false,
-    );
-
     return Column(
       children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _buildProductItem(context, avocado),
-              _buildProductItem(context, brocoli),
-              _buildProductItem(context, tomatoes), 
-              _buildProductItem(context, grapes), 
-            ],
+        SizedBox(
+          height: 240, 
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('products')
+                .limit(5) 
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) return const Text("Error loading deals");
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              
+              final docs = snapshot.data!.docs;
+              if (docs.isEmpty) return const Text("No trending deals");
+
+              return ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: docs.length,
+                itemBuilder: (context, index) {
+                  final product = Product.fromFirestore(docs[index]);
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 16.0),
+                    child: SizedBox(
+                      width: 160,
+                      child: ProductCard(product: product),
+                    ),
+                  );
+                },
+              );
+            },
           ),
         ),
 
         const SizedBox(height: 24),
         ElevatedButton(
           onPressed: () {
-            // Aksi saat tombol LOAD MORE ditekan
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -305,71 +334,6 @@ class _HomeScreenState extends State<HomeScreen> {
           child: const Text('LOAD MORE'),
         ),
       ],
-    );
-  }
-
-  Widget _buildProductItem(BuildContext context, Product product) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 16.0),
-      child: GestureDetector(
-        onTap: () {
-          // Aksi navigasi ke halaman DETAIL PRODUK
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ProductDetailScreen(product: product),
-            ),
-          );
-        },
-        child: SizedBox(
-          width: 150,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                height: 150,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  image: DecorationImage(
-                    image: AssetImage(product.imagePath),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                child: Align(
-                  alignment: Alignment.topRight,
-                  child: Padding(
-                    padding: const EdgeInsets.all(10.0),
-                    child: Icon(
-                      product.isFavorite ? Icons.favorite : Icons.favorite_border,
-                      color: product.isFavorite ? Colors.red : Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                product.name,
-                style: const TextStyle(
-                  color: kTextColor,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '\$${product.price}',
-                style: const TextStyle(
-                  color: kTextColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

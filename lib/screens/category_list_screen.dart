@@ -1,19 +1,14 @@
 // lib/screens/category_list_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Tambahkan ini
+// import 'package:flutter_svg/flutter_svg.dart'; // Hapus/Comment ini jika tidak dipakai lagi
+
 import '../main.dart';
 import '../models/category.dart';
 import 'category_detail_screen.dart';
 
 class CategoryListScreen extends StatelessWidget {
   const CategoryListScreen({super.key});
-
-  final List<Category> categories = const [
-    Category(name: 'Fruits', itemCount: 87, iconPath: 'assets/icons/grapes.svg'),
-    Category(name: 'Vegetables', itemCount: 24, iconPath: 'assets/icons/leaf.svg'),
-    Category(name: 'Mushroom', itemCount: 43, iconPath: 'assets/icons/mushroom.svg'),
-    Category(name: 'Bread', itemCount: 15, iconPath: 'assets/icons/bread.svg'),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -32,18 +27,46 @@ class CategoryListScreen extends StatelessWidget {
         elevation: 1,
         centerTitle: true,
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(20.0),
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          return _buildCategoryCard(context, categories[index]);
+      // MENGGUNAKAN STREAMBUILDER UNTUK DATA REALTIME
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('categories').snapshots(),
+        builder: (context, snapshot) {
+          // 1. Loading State
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // 2. Error State
+          if (snapshot.hasError) {
+            return Center(child: Text("Error: ${snapshot.error}"));
+          }
+
+          // 3. Empty State
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text("No categories found."));
+          }
+
+          final docs = snapshot.data!.docs;
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(20.0),
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              // Konversi Dokumen Firestore -> Model Category
+              final category = Category.fromFirestore(docs[index]);
+              return _buildCategoryCard(context, category);
+            },
+            separatorBuilder: (context, index) => const SizedBox(height: 16),
+          );
         },
-        separatorBuilder: (context, index) => const SizedBox(height: 16),
       ),
     );
   }
 
   Widget _buildCategoryCard(BuildContext context, Category category) {
+    // Logika ubah SVG ke PNG (Konsisten dengan halaman detail)
+    final String pngIconPath = category.iconPath.replaceAll('.svg', '.png');
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -51,7 +74,7 @@ class CategoryListScreen extends StatelessWidget {
           MaterialPageRoute(
             builder: (context) => CategoryDetailScreen(
               categoryName: category.name,
-              iconPath: category.iconPath,
+              iconPath: category.iconPath, // Kirim path asli (atau pngIconPath jika mau diubah dari awal)
               itemCount: category.itemCount,
             ),
           ),
@@ -61,23 +84,25 @@ class CategoryListScreen extends StatelessWidget {
         padding: const EdgeInsets.all(20.0),
         height: 110,
         decoration: BoxDecoration(
-          color: kPrimaryColor,
+          color: kPrimaryColor, // Pastikan kPrimaryColor ada di main.dart
           borderRadius: BorderRadius.circular(20),
         ),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
+            // Background Icon (Besar & Transparan)
             Positioned(
               left: -20,
               bottom: -40,
-              child: SvgPicture.asset(
-                category.iconPath,
+              child: Image.asset(
+                pngIconPath,
                 width: 120,
                 height: 120,
-                colorFilter: ColorFilter.mode(
-                  Colors.white.withOpacity(0.1),
-                  BlendMode.srcIn,
-                ),
+                // Efek transparan menggunakan Image.asset
+                color: Colors.white.withOpacity(0.1),
+                colorBlendMode: BlendMode.srcIn,
+                errorBuilder: (context, error, stackTrace) =>
+                    const SizedBox(), // Sembunyikan jika error
               ),
             ),
             
@@ -108,16 +133,15 @@ class CategoryListScreen extends StatelessWidget {
                   ],
                 ),
                 
-                SvgPicture.asset(
-                  category.iconPath,
+                // Icon Kecil di Kanan
+                Image.asset(
+                  pngIconPath,
                   width: 50,
                   height: 50,
-                  colorFilter: const ColorFilter.mode(
-                    Colors.white,
-                    BlendMode.srcIn,
-                  ),
+                  color: Colors.white,
+                  colorBlendMode: BlendMode.srcIn,
                   errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.error, color: Colors.white, size: 50),
+                      const Icon(Icons.image_not_supported, color: Colors.white),
                 ),
               ],
             ),

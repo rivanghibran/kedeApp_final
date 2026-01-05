@@ -1,9 +1,7 @@
 // lib/widgets/product_card.dart
 import 'package:flutter/material.dart';
-import '../models/product.dart';
-import '../screens/product_detail_screen.dart'; 
-// Ganti 'kede_app' dengan nama proyek Anda (di pubspec.yaml)
-// Import untuk kTextColor, dll.
+import '../models/product_model.dart'; // Import model yang benar
+import '../screens/product_detail_screen.dart';
 
 class ProductCard extends StatelessWidget {
   final Product product;
@@ -24,15 +22,14 @@ class ProductCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           image: DecorationImage(
-            // --- PERBAIKAN DI SINI ---
-            // 'AssetsImage' diubah menjadi 'AssetImage'
-            image: AssetImage(product.imagePath), 
+            // Menggunakan AssetImage sesuai permintaan
+            image: AssetImage(product.imagePath),
             fit: BoxFit.cover,
-            // 'onError' dihapus karena tidak didukung oleh AssetImage
           ),
         ),
         child: Stack(
           children: [
+            // Gradient Overlay agar text terbaca
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
@@ -48,6 +45,7 @@ class ProductCard extends StatelessWidget {
               ),
             ),
             
+            // Icon Favorite
             Positioned(
               top: 10,
               right: 10,
@@ -57,6 +55,7 @@ class ProductCard extends StatelessWidget {
               ),
             ),
             
+            // Product Info
             Positioned(
               bottom: 12,
               left: 12,
@@ -76,7 +75,7 @@ class ProductCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '\$${product.price}',
+                    '\$${product.price}', // Tampilkan harga
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
