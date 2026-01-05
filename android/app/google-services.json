@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "417041453280",
+    "project_id": "kedeapp",
+    "storage_bucket": "kedeapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:417041453280:android:fe97722f94dd4e9b8dc085",
+        "android_client_info": {
+          "package_name": "com.example.kede"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAZTRnBf8vauHmMc_yorS8GEMxAewhFaus"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
