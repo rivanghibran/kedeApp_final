@@ -6,7 +6,8 @@ import 'firebase_options.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/my_profile_screen.dart';
 import 'screens/edit_profile_screen.dart';
-import 'screens/main_app_screen.dart'; // <--- pastikan ini di-import
+import 'screens/main_app_screen.dart'; 
+import 'services/seeder_service.dart'; // <--- 1. Import Service Seeder
 
 // Warna utama aplikasi
 const Color kPrimaryColor = Color(0xFF6ABF4B);
@@ -18,6 +19,12 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // <--- 2. AUTO SEEDER TRIGGER
+  // Menjalankan fungsi seeder di background saat aplikasi mulai.
+  // Logika "Cek apakah database kosong" akan ada di dalam file SeederService nanti.
+  SeederService().seedDatabase(); 
+
   runApp(const MyApp());
 }
 
@@ -91,14 +98,23 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    // StreamBuilder lebih baik daripada cek currentUser sekali saja,
+    // agar jika user logout, aplikasi otomatis pindah ke onboarding
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
+        if (snapshot.hasData) {
+          return const MainAppScreen();
+        }
 
-    if (user != null) {
-      // Jika sudah login, langsung ke MainAppScreen
-      return const MainAppScreen();
-    }
-
-    // Jika belum login, tampilkan Onboarding
-    return const OnboardingScreen();
+        return const OnboardingScreen();
+      },
+    );
   }
 }

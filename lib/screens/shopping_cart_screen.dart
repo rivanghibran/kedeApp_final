@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// Ganti 'kede_app' dengan nama package Anda jika perlu
 import '../main.dart'; 
-import '../services/firestore_service.dart'; // Wajib import service
+import '../services/firestore_service.dart'; 
 import 'checkout_screen.dart'; 
 
 class ShoppingCartScreen extends StatefulWidget {
@@ -36,18 +35,15 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
           style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
         ),
         actions: [
-          // Tombol Hapus Semua (Opsional)
           IconButton(
             icon: const Icon(Icons.delete_sweep, color: Colors.red),
             onPressed: () {
-               // Tambahkan logika hapus semua di service jika diinginkan
-               // _firestoreService.clearCart(); 
+              // Opsional: Implementasi clear cart di service nanti
             },
           )
         ],
       ),
       
-      // STREAMBUILDER UNTUK REALTIME UPDATE
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
@@ -63,7 +59,16 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
 
           // 2. Empty State
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("Your cart is empty"));
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.shopping_cart_outlined, size: 60, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text("Your cart is empty", style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            );
           }
 
           final cartDocs = snapshot.data!.docs;
@@ -152,13 +157,18 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
   }
 
   Widget _buildCartItem(String itemId, Map<String, dynamic> data) {
+    // Helper untuk memastikan path gambar valid
+    String imagePath = data['imagePath'] ?? '';
+    if (imagePath.isEmpty) imagePath = 'assets/images/images.jpg';
+
     return SizedBox(
       height: 100,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center, // Ubah ke center agar checkbox rapi
         children: [
-          // 1. CHECKBOX
-          Center(
+          // 1. CHECKBOX (PERBAIKAN: Hapus Center, ganti SizedBox/Padding)
+          SizedBox(
+            width: 30,
             child: Checkbox(
               value: data['isSelected'] ?? false,
               activeColor: kPrimaryColor,
@@ -167,22 +177,28 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
               },
             ),
           ),
+          const SizedBox(width: 8),
           
-          // 2. IMAGE
+          // 2. IMAGE (PERBAIKAN: Gunakan ClipRRect + ErrorBuilder)
           SizedBox(
             width: 80,
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    image: DecorationImage(
-                      image: AssetImage(data['imagePath'] ?? ''), // Pastikan path benar
-                      fit: BoxFit.cover,
-                    ),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset(
+                    imagePath,
+                    width: 80,
+                    height: 80,
+                    fit: BoxFit.cover,
+                    // Fallback jika gambar tidak ditemukan di assets
+                    errorBuilder: (context, error, stackTrace) {
+                      return Image.asset(
+                        'assets/images/images.jpg', 
+                        width: 80, height: 80, fit: BoxFit.cover
+                      );
+                    },
                   ),
                 ),
                 // Label Harga Kecil di Gambar
@@ -218,22 +234,26 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'FRUITS', // Bisa diganti dynamic category jika ada
-                          style: TextStyle(color: kTextLightColor, fontSize: 12),
-                        ),
-                        Text(
-                          data['name'] ?? 'Unknown',
-                          style: const TextStyle(
-                            color: kTextColor,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'ITEM', 
+                            style: const TextStyle(color: kTextLightColor, fontSize: 12),
                           ),
-                        ),
-                      ],
+                          Text(
+                            data['name'] ?? 'Unknown',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis, // Cegah teks panjang merusak layout
+                            style: const TextStyle(
+                              color: kTextColor,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     // Tombol Hapus Item
                     IconButton(
@@ -259,7 +279,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                       ),
                     ),
                     
-                    // Stepper Manual (Langsung update Firestore)
+                    // Stepper Manual
                     Container(
                       height: 30,
                       decoration: BoxDecoration(
